@@ -1,103 +1,177 @@
-import Image from "next/image";
+// app/page.tsx
+"use client"; // This page manages state, so it's a Client Component
 
-export default function Home() {
+import React, { useState, useMemo, useEffect } from 'react';
+import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import ExpenseForm from './components/ExpenseForm';
+import ReceiptUpload from './components/ReceiptUpload';
+import ExpenseList from './components/ExpenseList';
+import SummaryChart from './components/SummaryChart';
+import BudgetTips from './components/BudgetTips';
+import { Expense, ProcessedExpenseData } from './types';
+
+export default function HomePage() {
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [currentMonth, setCurrentMonth] = useState<string>(format(new Date(), 'yyyy-MM')); // e.g., "2024-04"
+
+  // Load expenses from localStorage on initial mount (simple persistence)
+  useEffect(() => {
+      const storedExpenses = localStorage.getItem('expenses_nextjs');
+      if (storedExpenses) {
+          try {
+            const parsedExpenses: Expense[] = JSON.parse(storedExpenses);
+             // Basic validation after parsing
+             if (Array.isArray(parsedExpenses)) {
+                 setExpenses(parsedExpenses.map(exp => ({
+                    ...exp,
+                    amount: Number(exp.amount) || 0, // Ensure amount is number
+                    id: Number(exp.id) || Date.now() // Ensure id is number
+                 })));
+             }
+          } catch (error) {
+             console.error("Failed to parse expenses from localStorage", error);
+             localStorage.removeItem('expenses_nextjs'); // Clear corrupted data
+          }
+      }
+  }, []);
+
+  // Save expenses to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('expenses_nextjs', JSON.stringify(expenses));
+  }, [expenses]);
+
+  const handleAddManualExpense = (newExpenseData: Omit<Expense, 'id'>) => {
+    const newExpense: Expense = {
+      ...newExpenseData,
+      id: Date.now(), // Simple unique ID
+      // Now it will keep the category from the form
+    };
+    setExpenses(prevExpenses => [newExpense, ...prevExpenses].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    ));
+  };
+
+  const handleAddProcessedExpense = (processedData: ProcessedExpenseData) => {
+     // Use defaults if AI couldn't determine values
+     const newExpense: Expense = {
+        id: Date.now(),
+        amount: processedData.amount ?? 0, // Use ?? for nullish coalescing
+        date: processedData.date ?? new Date().toISOString().split('T')[0],
+        description: processedData.description ?? 'Processed Receipt',
+        category: processedData.category ?? 'Uncategorized',
+     };
+      if (newExpense.amount <= 0 && !processedData.amount) {
+         alert("AI could not determine the expense amount. Please add manually or check the receipt.");
+         return; // Don't add expense with 0 amount if AI failed
+      }
+      setExpenses(prevExpenses => [newExpense, ...prevExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+  };
+
+  const handleDeleteExpense = (idToDelete: number) => {
+    if (confirm('Are you sure you want to delete this expense?')) {
+      setExpenses(prevExpenses => prevExpenses.filter(expense => expense.id !== idToDelete));
+    }
+  };
+
+  // Filter expenses based on the selected month
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(expense => {
+      // Ensure date comparison works correctly
+      return expense.date.startsWith(currentMonth);
+    });
+  }, [expenses, currentMonth]);
+
+  const totalMonthlyExpenses = useMemo(() => {
+      return filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  }, [filteredExpenses]);
+
+   const handleMonthChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setCurrentMonth(event.target.value);
+   };
+
+    // Function to clear all expenses
+    const clearAllExpenses = () => {
+        if (confirm('Are you sure you want to delete ALL expenses? This cannot be undone.')) {
+            setExpenses([]);
+            localStorage.removeItem('expenses_nextjs'); // Clear storage too
+        }
+    };
+
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="container mx-auto p-4 md:p-8 max-w-6xl">
+      <header className="text-center mb-8 border-b pb-4">
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-800">
+           <span className="text-indigo-600">AI</span>-Powered Expense Tracker 
+        </h1>
+      </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+      <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Entry */}
+        <section className="lg:col-span-1 space-y-6 p-6 bg-white rounded-lg shadow-md border border-gray-200">
+          <div>
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">Add New Expense</h2>
+              <ExpenseForm onAddExpense={handleAddManualExpense} />
+          </div>
+          <hr className="my-6 border-gray-200" />
+          <div>
+              <h3 className="text-lg font-semibold text-gray-700 mb-3">Or Upload Receipt</h3>
+              <ReceiptUpload onExpenseProcessed={handleAddProcessedExpense} />
+          </div>
+        </section>
+
+        {/* Right Column: List and Summary */}
+        <section className="lg:col-span-2 space-y-6">
+            {/* Month Selector and List */}
+            <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+                <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
+                     <h2 className="text-xl font-semibold text-gray-700">Your Expenses</h2>
+                      <div>
+                        <label htmlFor="month-select" className="text-sm font-medium text-gray-700 mr-2">Select Month:</label>
+                        <input
+                            type="month"
+                            id="month-select"
+                            value={currentMonth}
+                            onChange={handleMonthChange}
+                            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
+                        />
+                     </div>
+                </div>
+                <ExpenseList expenses={filteredExpenses} onDeleteExpense={handleDeleteExpense} />
+                 {expenses.length > 0 && (
+                     <button
+                        onClick={clearAllExpenses}
+                        className="mt-4 inline-flex justify-center rounded-md border border-transparent bg-red-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                    >
+                        Clear All Expenses
+                    </button>
+                 )}
+            </div>
+
+            {/* Summary and Insights */}
+            <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-700 mb-4">Monthly Summary & Insights</h2>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                     {/* Chart */}
+                     <div className="w-full">
+                        <SummaryChart expenses={filteredExpenses} />
+                     </div>
+                      {/* Details & Tips */}
+                     <div className="space-y-3">
+                          <h3 className="text-lg font-medium text-gray-800">
+                             Total Expenses ({format(parseISO(currentMonth + '-01'), 'MMMM yyyy')}):
+                             <span className="font-bold ml-2">₹{totalMonthlyExpenses.toFixed(2)}</span>
+                          </h3>
+                          <BudgetTips expenses={filteredExpenses} />
+                     </div>
+                 </div>
+            </div>
+        </section>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+       <footer className="text-center mt-12 pt-6 border-t text-gray-500 text-sm">
+          Built with Next.js, TypeScript, Tailwind CSS & AI ✨
+       </footer>
     </div>
   );
 }
