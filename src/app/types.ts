@@ -12,6 +12,6 @@ export interface Expense {
   export interface ProcessedExpenseData {
       amount: number | null;
       date: string | null; // Should be YYYY-MM-DD
-      description: string | null;
+      merchant: string | null;
       category: string | null;
   }

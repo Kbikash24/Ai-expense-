@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     });
 
     const extractedText = ocrResponse.choices[0]?.message?.content;
+    console.log(extractedText,'test')
     
     if (!extractedText) {
       console.warn("No text detected in image");
